@@ -1,0 +1,289 @@
+%!Tex Program = xelatex
+\documentclass{ctexart}
+\usepackage{listings}
+\usepackage{graphicx}
+\usepackage{amsfonts}
+\usepackage{float}
+\usepackage{amsmath}
+\usepackage{fancyvrb}
+
+\title{大作业：step-3}
+\author{申屠慧 \\ 能源与环境系统工程（智慧能源班） 3210103417}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{工作的主要内容}
+\subsection{有限元方法的基本设置}
+这是我们实际使用有限元来计算某些内容的第一个示例。我们将求解边界值为零但右侧非零的泊松方程的简单版本：
+\begin{align*}
+    -\Delta u = f \quad \quad in \quad \Omega, \\
+    u = 0  \quad \quad on \quad \partial \Omega. \notag
+\end{align*}
+我们将在方形区域$ \Omega = [-1,1]^2 , f(x) = 1 $内求解方程。
+
+根据有限元方法的基础知识，我们会知道所需要采取的近似解的步骤：
+\begin{equation*}
+    -\int_{\Omega} \varphi \,du = -\int_{\Omega} \varphi f \text{\_}
+\end{equation*}
+使用分部积分，
+\begin{equation*}
+    \int_{\Omega} \nabla \varphi \cdot \nabla u - \int_{\partial \Omega} \partial n \cdot \nabla u = \int_{\Omega} \varphi f \text{\_} 
+\end{equation*}
+测试函数$\varphi \varphi = 0 $
+\begin{equation*}
+    (\nabla \varphi , \nabla u) = (\varphi , f),
+\end{equation*}
+这里\((a,b)=\int_\Omega a\; b\)，问题要求对所有测试函数，此陈述均成立，
+
+当然，一般情况下我们在计算机上找不到这样的函数，而是寻求一个近似值。
+\(u_h(\mathbf x)=\sum_j U_j \varphi_j(\mathbf x)\)，其中$ U_j $是我们需要确定的未知展开系数（该问题的“自由度”），
+以及\(\varphi_i(\mathbf x)\)是我们要使用的有限元函数。 
+
+为了定义这些形状函数，我们需要以下内容：
+\begin{itemize}
+    \item 用于定义形状函数的网格。
+    \item 描述我们想要在参考单元上使用的形状函数的有限元（在 deal.II 中始终是单位间隔）
+    \item 一个DoFHandler对象，以有限元对象提供的参考单元描述为基础，枚举网格上的所有自由度。
+    \item 一种映射，说明如何从参考单元上的有限元类定义的形状函数获得实际单元上的形状函数。
+\end{itemize}
+
+通过这些步骤，我们现在有了一组函数\(\varphi_i\)，我们可以定义离散问题的弱形式：
+找到一个函数\(u_h\)，即求展开系数$U_j$。所以，
+\begin{align*}
+    (\nabla\varphi_i, \nabla u_h)
+     = (\varphi_i, f),
+     \qquad\qquad
+     i=0\ldots N-1.
+\end{align*}
+请注意，我们这里遵循的约定是所有内容都从零开始计数，这在 C 和 C++ 中很常见。如果插入表示，该方程可以重写为线性方程，
+\(u_h(\mathbf x)=\sum_j U_j\varphi_j(\mathbf x)\)并且观察到
+\begin{align*}
+    (\nabla\varphi_i, \nabla u_h)
+    &= \left(\nabla\varphi_i, \nabla \Bigl[\sum_j U_j \varphi_j\Bigr]\right)
+  \\
+    &= \sum_j \left(\nabla\varphi_i, \nabla \left[U_j \varphi_j\right]\right)
+  \\
+    &= \sum_j \left(\nabla\varphi_i, \nabla \varphi_j \right) U_j.
+\end{align*}
+
+这样，问题就变成了：找到一个向量$U$使
+\begin{align*}
+    A U = F,
+\end{align*}
+，其中矩阵$A$和右式$F$定义为
+\begin{align*}
+    A_{ij} = (\nabla\varphi_i, \nabla \varphi_j),
+    \\
+    F_i = (\varphi_i, f).
+\end{align*}
+
+\subsection{我们应该从左边还是从右边乘以测试函数？}
+在我们继续描述如何计算这些量之前，请注意，如果我们将原始方程从右侧而不是从左侧乘以测试函数，那么我们将获得以下形式的线性系统
+\begin{align*}
+    U^T A = F^T
+\end{align*}
+带有行向量\(F^T\)。通过转置这个系统，这当然等价于求解
+\begin{align*}
+    A^T U = F
+\end{align*}
+这与上面相同，因为\(A=A^T\)。
+但总的来说并非如此，为了避免任何形式的混乱，经验表明，简单地养成从左而不是从右相乘方程的习惯（就像数学文献中经常做的那样）可以避免常见的错误情况。
+因为矩阵会自动正确，并且在比较理论和实现时不需要转置。请参阅本教程中第一个示例的步骤 9，其中我们有一个非对称双线性形式，无论从右侧还是从左侧相乘，都会有所不同。
+
+\subsection{组合矩阵和右侧向量}
+知道了需要什么之后，我们可以看看如何实现。
+\begin{itemize}
+    \item 当组装线性系统时，首先需要创建用于存储矩阵和向量的对象。矩阵$ A $的对象类型是 SparseMatrix，向量$ U $和$ F $的对象类型是 Vector。
+    \item 我们首先将积分分割为$\Omega$转化为所有单元格的积分,
+    \begin{align*}
+        A_{ij} &= (\nabla\varphi_i, \nabla \varphi_j)
+        = \sum_{K \in {\mathbb T}} \int_K \nabla\varphi_i \cdot \nabla \varphi_j,
+        \\
+        F_i &= (\varphi_i, f)
+        = \sum_{K \in {\mathbb T}} \int_K \varphi_i f,
+    \end{align*}
+    \item 然后通过求积来近似每个单元格的贡献：
+    \begin{align*}
+        A^K_{ij} &=
+        \int_K \nabla\varphi_i \cdot \nabla \varphi_j
+        \approx
+        \sum_q \nabla\varphi_i(\mathbf x^K_q) \cdot \nabla
+        \varphi_j(\mathbf x^K_q) w_q^K,
+        \\
+        F^K_i &=
+        \int_K \varphi_i f
+        \approx
+        \sum_q \varphi_i(\mathbf x^K_q) f(\mathbf x^K_q) w^K_q,
+    \end{align*}
+    在这里 \(\mathbb{T} \approx \Omega\) 是近似域的三角剖分，\(\mathbf x^K_q\)是个 \(q\)th上的第一个正交点$K$， 和$w^K_q$这\(q\)th正交权重。执行此操作需要不同的部分，我们将在接下来依次讨论它们。
+    \item 使用 Quadrature 派生类来描述参考单元上的积分点和权重。通常选择高斯积分公式（QGauss 类）以保证数值积分与矩阵积分的精确度。计算形状函数在单元上的值。FEValues 类接受有限元对象来描述参考单元上的形状函数，接受积分对象来描述积分点和权重，并接受映射对象（MappingQ1 类或其他派生类）来将参考单元上的积分点映射到实际单元上的点。
+    \item FEValues 类提供形状函数在实际单元上的值、导数以及积分所需的其他信息。
+\end{itemize}
+
+总体而言，组装线性系统的过程可以看作是将一组碎片或元素组装在一起的过程。FEValues 类是核心类，在计算机上处理有限量信息（形状函数值和导数、积分权重、法向量等）。在特定单元 KK 上，FEValues 类提供了这个有限集合的信息。
+
+需要注意的是，如果您愿意，也可以自己创建这些对象并处理信息。然而，使用 FEValues 类更为简单和有效，它只计算实际所需的信息，并在可能时重用前一个单元的内容。
+
+一旦获得线性系统，可以使用迭代求解器进行求解，并通过 DataOut 类创建输出文件以供后处理和可视化展示。
+
+\subsection{求解线性系统}
+在有限元程序中，我们得到的线性系统相对较小：
+矩阵的大小为$1089 \times 1089$，这是因为我们使用的网格是$32 \times 32$，所以网格中有$33^2=1089$个顶点。
+在许多后续的教程程序中，矩阵的大小往往在几万到几十万之间，
+并且使用了像ASPECT这样建立在deal.II上的代码，我们经常解决具有一亿多个方程的问题（尽管使用并行计算机）。
+无论如何，即使对于这里的小系统，矩阵也比大多数本科或大多数研究生课程中通常遇到的矩阵要大得多，所以问题是如何解决这样的线性系统。
+
+最初学习解决线性系统的方法是高斯消元法。
+这种方法的问题在于它需要的操作数量与线性系统中的方程或未知数的数量成正比，
+更具体地说，操作数量是$ \frac{2}{3} N^3$左右。对于$N=1089$，这意味着我们将不得不进行约8.61亿次操作。
+这个数字是相当可行的，现代处理器只需要不到0.1秒就可以完成。但很明显，这种方法并不能扩展：
+如果线性系统中的方程数增加到原来的二十倍（即未知数增加到原来的二十倍），那么所需时间将增加到1000-10000秒左右，大约需要一个小时。再增加十倍，就可以明确地看出我们无法在单台计算机上解决它。
+
+为了解决这个问题，我们可以意识到矩阵中只有相对较小的一部分元素是非零的，也就是说，这个矩阵是稀疏的。
+高斯消元法的变种可以利用这一点，使得处理过程更快；我们将在第29步中首次使用一种这样的方法 - 在SparseDirectUMFPACK类中实现的方法，后面还会有其他几种。这些高斯消元法的变种可以让我们处理大约10万到20万的问题规模，但很难达到更大的规模。
+
+因此，我们要做的是采用1952年的一个想法：共轭梯度法，即简称"CG"。
+CG是一种"迭代"求解器，它形成一系列向量，这些向量收敛到精确解；
+实际上，在没有舍入误差的情况下，经过$N$次迭代后，它可以找到对称正定矩阵的精确解。
+与高斯消元法一样，最初开发这个方法的目的是为了精确解决线性系统，但是作为这样一个方法，它几乎没有任何优势，并在几十年间被人们遗忘。
+然而，当计算机变得足够强大，可以解决高斯消元法无法很好处理的问题规模时（大约在20世纪80年代），CG方法被重新发现，因为人们意识到它非常适用于从有限元方法得到的大型稀疏系统。
+这是因为 
+\begin{itemize}
+    \item 它计算的向量收敛到精确解，所以实际上我们并不需要做所有的$N$次迭代来找到精确解，只要我们对相对较好的近似解满意即可；
+    \item 它只需要进行矩阵-向量乘积，这对于稀疏矩阵非常有用，因为根据定义，稀疏矩阵只有${\cal O}(N)$个元素，因此矩阵-向量乘积可以在${\cal O}(N)$的计算量内完成，而对于稠密矩阵则需要$N^2$的操作。因此，我们希望能够使用最多${\cal O}(N^2)$的操作来解决线性系统，在许多情况下实际上可以更少。
+\end{itemize}
+因此，几乎所有有限元代码都使用迭代求解器，如CG方法来解决线性系统，我们在这个代码中也将使用它。
+（值得注意的是，CG方法只适用于对称正定矩阵；对于其他方程，矩阵可能没有这些特性，我们将不得不使用其他迭代求解器的变种，如BiCGStab或GMRES，它们适用于更一般的矩阵。）
+
+这些迭代求解器的一个重要组成部分是我们指定解线性系统时的公差 - 本质上是关于我们愿意接受的近似解误差的陈述。
+对于线性系统$Ax=b$的近似解$\tilde x$与精确解$x$之间的误差被定义为$|x-\tilde x|$，但这是一个我们无法计算的量，因为我们不知道精确解$x$。相反，我们通常考虑到可计算的残差，定义为$|b-A\tilde x|=|A(x-\tilde x)|$。然后，我们让迭代求解器计算出越来越精确的解$\tilde x$，直到$|b-A\tilde x|\le \tau$。一个实际的问题是$\tau$应该取什么值。在大多数应用中，设定
+\begin{align*}
+    \tau = 10^{-6} |b|  
+\end{align*}
+是一个合理的选择。将$\tau$与$b$的大小（范数）成比例可以确保我们对解的精度的期望与解的大小相对应。这是有道理的：如果我们使右手边$b$变大十倍，那么线性系统$Ax=b$的解$x$也会变大十倍，所以近似解$\tilde x$也会变大十倍；我们希望在$\tilde x$中的准确位数相同，这意味着我们也应在残差$|b-A\tilde x|$变成原始大小的十倍时终止 - 这正是我们得到的结果，如果我们使$\tau$与$|b|$成比例。
+
+所有这些将在本程序的Step3::solve()函数中实现。使用deal.II来设置线性求解器非常简单：整个函数只有三行代码。
+
+\subsection{关于实现}
+尽管这是可以使用有限元方法求解的最简单的方程，但该程序显示了大多数有限元程序的基本结构，并且也充当了几乎所有以下程序都将遵循的模板。具体来说，该程序的主类如下所示：
+\begin{lstlisting}
+    class Step3
+    {
+      public:
+        Step3 ();
+        void run ();
+     
+      private:
+        void make_grid ();
+        void setup_system ();
+        void assemble_system ();
+        void solve ();
+        void output_results () const;
+     
+        Triangulation<2>     triangulation;
+        FE_Q<2>              fe;
+        DoFHandler<2>        dof_handler;
+     
+        SparsityPattern      sparsity_pattern;
+        SparseMatrix<double> system_matrix;
+        Vector<double>       solution;
+        Vector<double>       system_rhs;
+    };
+\end{lstlisting}
+这遵循面向对象编程的数据封装原则，即我们尽力将此类的几乎所有内部​​细节隐藏在外部无法访问的私有成员中。
+\begin{itemize}
+    \item 成员变量变量遵循我们上面在要点中概述的构建块，
+    即我们需要一个Triangulation和一个DoFHandler对象，以及一个描述我们想要使用的形状函数类型的有限元对象。
+    第二组对象与线性代数相关：系统矩阵和右侧以及解向量，以及描述矩阵稀疏模式的对象。
+    这就是此类的全部需求（以及任何平稳偏微分方程求解器所需的要素），并且需要在整个程序中生存。
+    与此相反，FEValues我们组装所需的对象仅在整个组装过程中需要，因此我们在执行此操作的函数中将其创建为本地对象，并在结束时再次销毁它。
+    \item 成员函数也已经形成了几乎所有以下教程程序都会使用的通用结构，包括
+    \begin{verbatim}make_grid、setup_system、assemble_system、solve和output_result\end{verbatim}等函数。
+    这些函数分别用于生成网格、设置系统、组装系统、求解方程和输出结果。
+\end{itemize}
+
+\subsection{关于类型的注释}
+在deal.II中，使用了一些整数类型来表示全局自由度索引。
+
+其中，types::global\_dof\_index 是一个整数类型，
+用于表示一个自由度的全局索引，
+即定义在三角形上的 DoFHandler 对象中的特定自由度的索引，
+而不是特定单元格内的自由度索引。
+对于当前程序（以及大多数教程程序），全局未知数的数量可能在几千到几百万之间
+（对于$ Q_1 $元素，在2D中每个单元格上有4个局部未知数，在3D中有8个）。
+因此，需要使用足够大的数据类型来存储全局自由度索引，
+unsigned int 是一种常用的选择，因为它可以在大多数系统上存储0到略大于40亿的数字
+（在32位系统上）。实际上，types::global\_dof\_index 就是使用的这个类型。
+
+那么为什么不直接使用unsigned int呢？
+
+在deal.II 7.3版本之前，deal.II确实是这样做的。
+但是，deal.II支持非常大的计算（通过step-40中讨论的框架），当这些计算分布在几千个处理器上时，可能会有超过40亿个未知数。因此，在某些情况下，unsigned int 不够大，我们需要一个64位的无符号整数类型。
+为了实现这一点，我们引入了 types::global\_dof\_index，
+默认情况下它被定义为unsigned int，
+但是如果需要，可以通过在配置过程中传递特定标志将其定义为 unsigned long long int
+（请参阅ReadMe文件）。
+
+这样做不仅涵盖了技术方面的考虑，还有文档目的：
+在库和构建于此之上的代码中，
+如果你看到使用数据类型 types::global\_dof\_index的地方，
+你立即就知道所引用的数量实际上是一个全局自由度索引。
+如果我们只使用 unsigned int，则不会明确表示这一含义（它也可能是一个局部索引、边界指示器、材料ID等）。立即知道变量所指的内容还有助于避免错误：
+如果你看到将类型为 ypes::global\_dof\_index 的对象赋值给类型为
+ types::subdomain\_id 的变量，
+即使它们都由无符号整数表示，并且编译器因此不会报错，你也会知道肯定存在Bug。
+
+从更实际的角度来说，这个类型的存在意味着在组装过程中，
+我们创建了一个当前所在单元格的贡献的$ 4 \times 4 矩阵$（在2D中使用$ Q_1 $元素），
+然后我们需要将该矩阵的元素添加到全局（系统）矩阵的相应元素中。
+为此，我们需要获取当前单元格的局部自由度的全局索引，我们将始终使用以下代码段：
+\begin{lstlisting}
+    cell->get_dof_indices (local_dof_indices);
+\end{lstlisting}
+其中 local\_dof\_indices 声明为
+\begin{lstlisting}
+std::vector<types::global_dof_index> local_dof_indices(fe.n_dofs_per_cell());
+\end{lstlisting}
+这个变量的名字可能有点不准确，它表示“当前单元局部定义的自由度的全局索引”，但是在整个库中普遍使用这样命名的变量来保存这些信息。
+
+需要注意的是，types::global\_dof\_index并不是该命名空间中唯一定义的类型。
+实际上，还有一组其他类型，包括
+types::subdomain\_id、types::boundary\_id和types::material\_id。
+它们都是整数数据类型的别名，但是如上所述，它们在整个库中被广泛使用，以便
+\begin{itemize}
+    \item 更容易识别变量的意图
+    \item 如果需要，可以更改实际类型为更大的类型，
+    而无需查找整个库以确定特定使用的unsigned int是否对应于材料指标等。
+\end{itemize}
+
+\section{step-3计算的问题}
+step-3在step-1（划分网格）和step-2（为网格分配自由度）的基础上，求解泊松方程。
+\(\Delta u(x,y) = 0\)
+\begin{itemize}
+    \item 边界条件：\\
+    在这个例子中，定义了两个边界条件：\\
+        内部边界：左侧和下方的边界上的u值被固定为5。\\
+        外部边界：右侧和上方的边界上的u值被固定为0。
+    \item 网格和有限元离散化：\\
+    示例程序将计算区域划分为一个规则的矩形网格，并使用有限元方法对偏微分方程进行离散化。
+    各种参数和配置确定了网格的大小、单元格的数量和有限元的类型。
+    \item 核心参数：\\
+    以下是step-3示例程序中的关键参数：\begin{itemize}
+        \item 网格参数：定义计算区域的大小和网格的细化程度。
+        \item 有限元参数：定义有限元的类型和阶数，如线性有限元或二次有限元。
+        \item 边界条件参数：定义边界条件。
+        \item 求解器参数：定义用于求解离散化方程的求解器类型、迭代次数和容错限制等。
+    \end{itemize}
+\end{itemize}
+
+\section{输出结果图片}
+\begin{figure}[H]
+    \centering
+    \includegraphics{../src/build/solution.eps}
+    \caption{生成的图片}
+    \label{fig:picture}
+\end{figure}
+\end{document}

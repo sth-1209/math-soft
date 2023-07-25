@@ -1,0 +1,1216 @@
+%!Tex Program = xelatex
+%\documentclass[a4paper]{article}
+\documentclass[a4paper]{ctexart}
+\usepackage{xltxtra}
+\usepackage{listings}
+%\setmainfont[Mapping=tex-text]{AR PL UMing CN:style=Light}
+%\setmainfont[Mapping=tex-text]{AR PL UKai CN:style=Book}
+%\setmainfont[Mapping=tex-text]{WenQuanYi Zen Hei:style=Regular}
+%\setmainfont[Mapping=tex-text]{WenQuanYi Zen Hei Sharp:style=Regular}
+%\setmainfont[Mapping=tex-text]{AR PL KaitiM GB:style=Regular} 
+%\setmainfont[Mapping=tex-text]{AR PL SungtiL GB:style=Regular} 
+%\setmainfont[Mapping=tex-text]{WenQuanYi Zen Hei Mono:style=Regular} 
+
+
+\title{第三讲：Linux 环境和 Shell 编程}
+\author{申屠慧 \\ 能源与环境系统工程（智慧能源班） 3210103417}
+\date{}
+\begin{document}
+\maketitle
+\pagestyle{empty}
+
+\section{重定向、管道}
+
+Shell 中一切都是文件，包括标准输入输出。比如 \verb|ls -l| 的输出结果默认是输出到 \verb|stdout|，
+也就是标准输出设备，但你可以用重定向操作符将其重定向为一个文件，比如：
+\begin{lstlisting}[language=sh]
+ls -l > output.txt
+\end{lstlisting}
+
+这个就是把 \verb|ls -l| 的输出结果保存在 \verb|output.txt| 中。 
+
+操作符 \verb|>| 是重写一个新文件，而 \verb|>>| 是追加在原文件末尾。
+尝试一下。
+
+我们知道除了标准输出文件 \verb|stdout|，还有一个标准错误文件 \verb|stderr|，
+这个往往和 \verb|stdout| 指向同一个输出设备。但可以通过重定向分离。
+一般默认的输出是标准输出文件，而 2 则值标准错误文件。比如：
+\begin{lstlisting}[language=sh]
+kill -HUP 1234
+\end{lstlisting}
+删除进程 1234, 显示
+\begin{lstlisting}[language=sh]
+bash: kill: (1234) - No such process
+\end{lstlisting}
+因为一般不会正好有这个进程号。这里全部都是标准错误文件输出的，所以如果运行
+\begin{lstlisting}[language=sh]
+kill -HUP 1234 > output.txt
+\end{lstlisting}
+则得到一个空文本文件。要
+\begin{lstlisting}[language=sh]
+kill -HUP 1234 2> output.txt
+\end{lstlisting}
+才能截获错误信息到文本文件。如果我们想同时截获标准输出和错误输出并放在一个文件里，可以
+\begin{lstlisting}[language=sh]
+kill -HUP 1234 >killout.txt 2>&1
+\end{lstlisting}
+注意，\verb|2>&1| 之间不能有空格。如果输出中有很多垃圾信息你不想看，
+可以将其重定向到一个垃圾桶：
+\begin{lstlisting}[language=sh]
+kill -l 1234 2>/dev/null
+\end{lstlisting}
+
+既然标准输出可以重定向，标准输入自然也可以
+\begin{lstlisting}[language=sh]
+ls ~ -lR > output.txt
+\end{lstlisting}
+先搞一个大一点的输出，把它丢给 \verb|more| 做输入，功能是把输入一屏幕一屏幕输出。
+\begin{lstlisting}[language=sh]
+more < output.txt
+\end{lstlisting}
+注意这里操作符反向了。
+
+然后这里有一件很土的事情，就是这个
+\verb|output.txt| 就是一个中转站，何必一定要存下来呢？就不能直接转移过去？
+也就是把一个命令的输出当作另一个命令的输入。这个当然可以，就叫管道，
+操作符是 \verb|||。
+\begin{lstlisting}[language=sh]
+ls ~ -lR | more
+\end{lstlisting}
+大家可能注意到我曾经在输出中只显示有关键字的部分，用的也是管道：
+\begin{lstlisting}[language=sh]
+ls ~ -lR | grep usr
+\end{lstlisting}
+管道和重定向可以根据需要多重连接。
+
+\section{循环过程}
+
+Shell 提供了表示循环和分支判定的结构，如：
+\begin{lstlisting}[language=sh]
+for file in *
+do
+if grep -l figure $file
+then
+ls $file -l
+fi
+done
+\end{lstlisting}
+这里
+\begin{lstlisting}[language=sh]
+for file in *
+do
+...something...
+done
+\end{lstlisting}
+是一个循环结构，\verb|file| 是一个用户定义的变量，
+\verb|*| 表示当前目录下所有文件，\verb|in| 表示遍历。
+所以这段命令的意思就是遍历当前目录下所有文件，对每个文件重复做
+\verb|...something...| 这件事。比如：
+\begin{lstlisting}[language=sh]
+for fAd in *
+do
+echo $fAd
+done
+\end{lstlisting}
+就是遍历当前目录，将全部文件名都打印一遍。命令 \verb|echo| 是打印输出的意思。
+
+\section{分支过程}
+然后看内层是一个分支结构：
+\begin{lstlisting}[language=sh]
+if [ ...condition... ]
+then
+...do something...
+fi
+\end{lstlisting}
+以上是一个标准的 \verb|if ... fi| 结构。但我们用的时候没有
+\verb|...condition...|，类似 C 语言，只要 \verb|...condition...| 部分不为空，
+我们就认为条件是真。所以这里的意思是
+\begin{lstlisting}[language=sh]
+if grep -l figure $file
+then
+ls $file -l
+fi
+\end{lstlisting}
+只要
+\begin{lstlisting}[language=sh]
+grep -l figure $file
+\end{lstlisting}
+过滤的结果不为空，即之前遍历到的 \verb|$file| 这些文件里存在包含 \verb|figure|
+单词的，就把它的详细信息列出来。你自己可以根据需要做自由的调整，比如：
+\begin{lstlisting}[language=sh]
+for file in *
+do
+if grep -l figure $file
+then
+cp $file ~/Documents
+fi
+done
+\end{lstlisting}
+这是什么意思？已经具有收集功能了。
+
+\section{通配符（wildcard expansion）}
+注意到这里 \verb|*| 是一个典型的通配符，意思是全部文件；类似的通配符还有：
+\begin{itemize}
+\item \verb|?|，任一单个字符，比如：\verb|lec0?|，那么
+  \verb|lec01|，\verb|lec02| 和 \verb|lec0k| 都匹配；
+\verb|[]|，括号中任一字母。比如：\verb|lec0[abc]|，那么
+\verb|lec0a|，\verb|lec0b| 和 \verb|lec0c| 都匹配；
+\item \verb|[^]| 或 \verb|[!]|, 不含括号内的任一字符，比如：\verb|lec0[!12]|，
+  那么 \verb|lec01| 和 \verb|lec02| 都不匹配；
+\item \verb|{}|，包含大括号内任一字串，比如：\verb|lec03{.log,.pdf}| 则匹配
+  \verb|lec03.pdf| 或 \verb|lec03.log|。
+\end{itemize}
+以上通配符可自由组合，比如：\verb|*0?.{t??,a*}|。
+
+然后 \verb|$| 操作符主要有两个意思，要么是表示将一个变量替换成变量值，如之前的 \verb|$file|；
+也可以表示对命令的替换。比如：
+\begin{lstlisting}[language=sh]
+grep -l crazyfish *
+\end{lstlisting}
+表示列出目录下所有含有 \verb|crazyfish| 字符串的文件名，那么
+\begin{lstlisting}[language=sh]
+ls -l $(grep -l crazyfish *)
+\end{lstlisting}
+就表示进一步列出这些文件的详细信息。
+
+\section{脚本代码 (script)}
+
+现在我们可以用连续的命令加上流程控制加上通配符实现比较复杂的功能。
+这些命令可以形成一个脚本，并用 bash 去运行。具体做法是依次写下命令，
+然后在第一行写上 \verb|#!/bin/bash| 表示这个脚本用哪个 shell 执行。
+下面是一个完整的脚本的例子：
+\begin{lstlisting}[language=sh]
+#!/bin/sh
+# first
+# This file looks through all the files in the current
+# directory for the string POSIX, and then prints the names of
+# those files to the standard output.
+for file in *
+do
+if grep -q crazyfish $file 
+then
+echo $file 
+fi
+done
+exit 0
+\end{lstlisting}
+将它存成一个文本文件，比如叫 \verb|test.sh|，然后将其设置成可执行，
+然后就可以像运行一个命令一样运行它。实际上，它构成一个组合命令，或称批处理。
+这里 \verb|grep -q| 表示安静地运行，或者说，不要实际输出，因为我们这里只要求
+\verb|grep| 返回是否找到这样一个状态就行。
+
+\section{变量}
+
+既然可以写脚本了，变量自然很重要。这里变量直接使用就可以：
+\begin{lstlisting}[language=sh]
+salutation=Hello
+echo $salutation
+\end{lstlisting}
+一赋值一输出。默认就是字符串，引不引号无所谓：
+\begin{lstlisting}[language=sh]
+salutation="Yes Dear"
+echo $salutation
+\end{lstlisting}
+就算是给数字，还是字符串：
+\begin{lstlisting}[language=sh]
+salutation=7+5
+echo $salutation
+\end{lstlisting}
+
+命令 \verb|read| 可以由用户给变量赋值：
+\begin{lstlisting}[language=sh]
+read salutation
+echo $salutation
+\end{lstlisting}
+
+从上面的过程我们可以看到，在 shell 中，双引号和不加引号都是字符串，
+而单引号和 \verb|\| 才是真正的引号：
+\begin{lstlisting}[language=sh]
+#!/bin/sh
+myvar="Hi there"
+echo $myvar
+echo "$myvar"
+echo '$myvar'
+echo \$myvar
+echo Enter some text
+read myvar
+echo '$myvar' now equals $myvar
+exit 0
+\end{lstlisting}
+(参见：example/scripts/quoting.sh)
+
+\section{环境变量}
+
+除了我们自定义的变量，shell 还内置了很多环境变量，供我们和系统交互。
+\begin{itemize}
+\item \verb|$HOME|，用户目录；
+\item \verb|$PATH|，执行程序的路径，放在这些路径下的可执行文件能够直接被运行；
+\item \verb|$PS1|，命令行提示符，普通用户是 \verb|$|，超级用户是 \verb|#|；
+\item \verb|$PS2|，第二提示符，比如等待输入状态，通常是 \verb|>|；
+\item \verb|$IFS|，输入参数的间隔符，一般是一个空格，也可以是 TAB 或换行；
+\end{itemize}
+以上都可以用 \verb|echo| 输出查看。但是
+\begin{lstlisting}[language=sh]
+echo $PS1
+\end{lstlisting}
+会得到
+\begin{lstlisting}[language=sh]
+${debian_chroot:+($debian_chroot)}\u@\h:\w\$
+\end{lstlisting}
+这里转义字符 \verb|\u| 表示用户名，\verb|\h| 表示主机名，\verb|\w| 表示当前路径。
+以下环境变量专门给 scripts 使用，
+\begin{itemize}
+\item \verb|$0|，脚本名；
+\item \verb|$#|，传递给脚本的参数个数；
+\item \verb|$$|，脚本的进程编号；
+\item \verb|$1|，\verb|$2|，...，传递给脚本的第 1 个，第 2 个参数，...；
+\item \verb|$*|，传递给脚本的全部参数，作为一个字符串；
+\item \verb|$@|，传递给脚本的全部参数，有几个参数就是几个字符串；
+\end{itemize}
+测试脚本(try\_var.sh)
+\begin{lstlisting}[language=sh]
+#!/bin/bash
+
+echo “The program $0 is now running”
+echo “The first parameter was $1”
+echo “The second parameter was $2”
+echo “The third parameter was $3”
+echo “The all parameters were $*“
+
+echo “The parameter list was:“
+for para in $@
+do
+echo $para
+done
+
+exit 0
+\end{lstlisting}
+体会一下 \verb|@*| 和 \verb|$@| 的区别。
+
+\section{判断条件（condition）}
+
+实际上，正经的 \verb|if| 后面应该跟一个条件判断，条件的写法是：
+\begin{lstlisting}[language=sh]
+if ...condition...
+\end{lstlisting}
+这里 \verb|...condition...| 的有两种表达，\verb|test| 或者 \verb|[  ]|，
+后者方括号两端必须各有一个空格。
+
+\begin{table}[p!]
+\caption{字符串逻辑运算关系表}
+\centering
+\begin{tabular}{|c|c|}
+\hline
+字符串比较 & 结果 \\
+\hline
+string1 = string2 & True 如果字符串相等 \\
+\hline
+string1 != string2 & True 如果字符串不想等 \\
+\hline
+-n string & True 如果字符串非空 \\
+\hline
+-z string & True 如果字符串空 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[p!]
+  
+\caption{算术逻辑运算关系表}
+\centering
+\begin{tabular}{|c|c|}
+\hline
+算术表达式 & 结果 \\
+\hline
+expression1 -eq expression2 & True 如果表达式值相等\\
+\hline
+expression1 -ne expression2 & True 如果表达式值不想等\\
+\hline
+expression1 -gt expression2 & True 如果 expression1 大于 expression2\\
+\hline
+expression1 -ge expression2 & True 如果 expression1 大于等于 expression2\\
+\hline
+expression1 -lt expression2 & True 如果 expression1 小于 expression2\\
+\hline
+expression1 -le expression2 & True 如果 expression1 小于等于 expression2\\
+\hline
+! expression & True 如果 expression false, 或反之\\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[p!]
+  \caption{文件逻辑运算关系表}
+\centering
+\begin{tabular}{|c|c|}
+\hline
+文件判断 & 结果 \\
+\hline
+-d file & True 如果 file 是目录\\
+\hline
+-e file & True 如果 file 存在\\
+\hline
+-f file & True 如果 file 是正经的文件\\
+\hline
+-g file & True 如果 file 设置了 group id\\
+\hline
+-r file & True 如果 file 可读\\
+\hline
+-s file & True 如果 file 大小不是零\\
+\hline
+-u file & True 如果 file 设置了 user id\\
+\hline
+-w file & True 如果 file 可写\\
+\hline
+-x file & True 如果 file 可执行\\
+\hline
+\end{tabular}
+\end{table}
+
+下面是一个如何测试/bin/bash文件状态的示例：
+\begin{lstlisting}[language=sh]
+  #!/bin/sh
+  if   [ -f /bin/bash ]
+  then
+  echo  "file  /bin/bash  exists"
+  fi
+  if   [ -d /bin/bash ]
+  then
+  echo  "/bin/bash  is  a  directory"
+  else
+  echo  "/bin/bash  is  NOT  a  directory"
+  fi
+\end{lstlisting}
+
+在测试为true之前，所有的文件条件测试都要求该文件也存在。
+这个列表只包含test命令更常用的选项，因此要获得完整的列表，请参考手动条目。
+如果你使用的是内置了test的bash，可以使用help test命令来获取更多详细信息。
+
+\section{控制结构}
+在下面几节中，语句是在条件满足时、同时或直到满足为止要执行的一系列命令。
+\subsection{if}
+\subsubsection{if}
+if语句非常简单:它测试一个命令的结果，然后有条件地执行一组语句.
+\begin{lstlisting} [language=sh]
+if  condition
+then
+  statements
+else
+  statements
+fi
+\end{lstlisting}
+
+常见用法：
+\begin{lstlisting}[language=sh]
+#!/bin/sh
+echo  "Is it morning? Please answer yes or no"
+read  timeofday
+if   [  $timeofday  =  “yes”  ];  then
+echo  “Good morning”
+else
+echo  “Good afternoon”
+fi
+exit  0
+
+\end{lstlisting}
+输出为：
+\begin{lstlisting}
+Is it morning? Please answer yes or no
+yes
+Good morning
+$
+\end{lstlisting}
+
+在if语句内部使用了额外的空格来缩进语句。
+这只是为了方便人类读者;
+shell会忽略额外的空白。
+
+\subsubsection{elif}
+你可以通过使用elif结构来防止出现其他情况，
+它允许你添加第二个条件，
+当执行if的else部分时进行检查。
+
+\begin{lstlisting}[language=sh]
+#!/bin/sh
+echo  "Is it morning? Please answer yes or no”
+read  timeofday
+if   [  $timeofday  =  "yes"  ]
+then
+echo  "Good morning"
+elif   [  $timeofday  =  "no" ];  then
+echo  "Good afternoon"
+else
+echo  "Sorry, $timeofday not recognized. Enter yes or no"
+exit  1
+fi
+exit  0
+\end{lstlisting}
+
+\textbf{注意：变量的问题}\\
+按回车键(或某些键盘上的回车键)，
+而不是回答问题。你会得到这样的错误信息: \\
+\texttt{[}: =:期望的一元运算符 \\
+出了什么问题?
+问题出在第一个if子句中。
+在测试变量timeofday时，
+它由一个空字符串组成。因此，if子句看起来像 
+\begin{lstlisting}[language=sh]
+  If [= " yes "]
+\end{lstlisting} 
+这不是一个有效的条件。
+为了避免这种情况，你必须在变量两边使用引号:
+\begin{lstlisting} 
+  If [" $timeofday " = " yes "]
+\end{lstlisting}
+然后一个空变量给出了有效的测试: 
+\begin{lstlisting}
+  If [" " = " yes "]
+\end{lstlisting}
+ 
+新脚本如下:
+\begin{lstlisting}[language=sh]
+  #!/bin/sh
+  echo  "Is it morning? Please answer yes or no"
+  read  timeofday
+  if   [  "$timeofday"  =  "yes"  ]
+  then
+  echo  "Good morning"
+  elif   [  "$timeofday"  =  "no"  ];  then
+  echo  "Good afternoon"
+  else
+  echo  "Sorry, $timeofday not recognized. Enter yes or no"
+  exit  1
+  fi
+  exit  0
+\end{lstlisting}
+
+\subsection{for}
+使用for结构来遍历一个范围的值，这个范围可以是任何一组字符串。它们可以简单地在程序中列出，或者，更常见的是，文件名的shell扩展的结果。 
+\begin{lstlisting}[language=sh]
+for  variable  in  values
+do
+  statements
+done
+\end{lstlisting}
+
+\subsubsection{固定字符串的for循环}
+\begin{lstlisting}[language=sh]
+#!/bin/sh
+for foo in bar fud 43
+do
+echo  $foo
+done
+exit  0
+\end{lstlisting}
+输出为：
+\begin{lstlisting}
+bar
+fud
+43
+\end{lstlisting}
+
+\subsubsection{带有通配符扩展的for循环}
+\begin{lstlisting}[language=sh]
+#!/bin/sh
+for  file  in  $(ls  f*.sh);  do
+lpr  $file
+done
+exit  0
+\end{lstlisting}
+shell展开f*.sh，给出所有匹配此模式的文件名称。 
+
+注意，shell脚本中所有变量的展开都是在脚本执行时完成的，永远不会在脚本编写时完成，因此变量声明中的语法错误只会在执行时发现，如前面我们引用空变量时所示。
+
+\subsection{while}
+当你需要重复一个命令序列，但事先不知道它们应该执行多少次时，通常会使用while循环，它的语法如下:
+\begin{lstlisting}[language=sh]
+while  condition  do
+  statements
+done
+\end{lstlisting}
+示例：
+\begin{lstlisting}[language=sh]
+#!/bin/sh
+echo  "Enter password"
+read  trythis
+while [ "$trythis" != "secret” ];  do
+echo  "Sorry, try again"
+read  trythis
+done
+exit  0
+\end{lstlisting}
+输出：
+\begin{lstlisting}
+Enter password
+password
+Sorry, try again
+secret
+$
+\end{lstlisting}
+
+\subsection{until}
+\begin{lstlisting}[language=sh]
+until  condition
+do
+  statements
+done
+\end{lstlisting}
+
+这与while循环非常相似，但条件测试相反。
+即循环会继续，直到条件为真，而不是在条件为真时继续。
+一般来说，如果循环应该至少执行一次，就使用while循环;如果它可能根本不需要执行，则使用until循环。 
+\begin{lstlisting}[language=sh]
+#!/bin/bash
+until who | grep "$1" >/dev/null
+do
+sleep 60
+done
+# now ring the bell and announce the expected  user .
+echo -e '\a'
+echo "**** $1 has just logged in ****"
+exit  0
+\end{lstlisting}
+
+\subsection{case}
+\begin{lstlisting}
+case  variable  in
+  pattern [ | pattern] ...) statements;;
+  pattern [ | pattern] ...) statements;;
+  ...
+esac
+\end{lstlisting}
+
+case结构使你能够以相当复杂的方式将变量的内容与模式进行匹配，然后根据匹配的模式，允许执行不同的语句。/par
+每个模式行都以双分号(;;)结尾。你可以在每个模式和下一个模式之间放多个语句，所以需要用双分号来标记一个语句的结束和下一个模式的开始。
+
+示例一：
+\begin{lstlisting}[language=sh]
+  #!/bin/sh
+  echo "Is it morning? Please answer yes or no"
+  read timeofday
+  case "$timeofday" in
+  yes) echo "Good Morning";;
+  no ) echo "Good Afternoon";;
+  y  ) echo "Good Morning";;
+  n  ) echo "Good Afternoon";;
+  *  ) echo "Sorry, answer not recognized";;
+  esac
+  exit  0
+\end{lstlisting}
+当case语句执行时，它获取timeofday的内容并依次与每个字符串进行比较。一旦字符串与输入匹配，case命令就会执行紧跟在)之后的代码并完成。
+
+示例二：
+\begin{lstlisting}[language=sh]
+#!/bin/sh
+echo "Is it morning? Please answer yes or no"
+read timeofday
+
+case "$timeofday" in
+yes | y | Yes | YES ) echo "Good Morning";;
+n* | N* ) echo "Good Afternoon";;
+*  ) echo "Good Afternoon";;
+esac
+
+exit 0
+\end{lstlisting}
+这个脚本在case的每个条目中使用多个字符串，以便case为每个可能的语句测试多个不同的字符串。
+这段代码还展示了如何使用*通配符，尽管这可能会匹配意想不到的模式。例如，如果用户输入never，那么它将被n*匹配，并将显示Good Afternoon，这不是预期的行为。还要注意，*通配符表达式不能在引号中使用。
+
+示例三：
+\begin{lstlisting}[language=sh]
+#!/bin/sh
+echo "Is it morning? Please answer yes or no"
+read timeofday
+
+case "$timeofday" in
+  yes | y | Yes | YES )
+    echo "Good Morning"
+    echo "Up bright and early this morning"
+    ;;
+  [nN]*)
+    echo "Good Afternoon"
+    ;;
+  *)
+    echo "Sorry, answer not recognized"
+    echo "Please answer yes or no"
+    exit 1
+    ;;
+esac
+
+exit 0
+\end{lstlisting}
+这段代码改变了no分支的匹配方式。您还可以看到如何为case语句中的每个模式执行多个语句。你必须小心地将最显式的匹配放在第一位，最一般的匹配放在最后。这一点很重要，因为case会执行它找到的第一个匹配项，而不是最佳匹配项。如果你把*)放在第一位，无论输入什么，它总是会被匹配。
+
+为了使分支匹配更强大，你可以使用这样的东西: 
+\begin{lstlisting}
+  [yY] | [yY] [Ee][Ss])
+\end{lstlisting}
+这在允许多种答案的同时限制了允许的字母，比*通配符提供了更多的控制。
+
+\section{列表}
+有时你想把命令串联起来，比如
+\begin{lstlisting}
+if [ -f this_file ]; then
+  if [ -f that_file ]; then
+    if [ -f the_other_file ]; then
+      echo “All files present, and correct”
+    fi
+  fi
+fi
+\end{lstlisting}
+或者你可能希望一系列条件中至少有一个为真，
+\begin{lstlisting}
+if [ -f this_file ]; then
+  foo=”True”
+elif [ -f that_file ]; then
+  foo=”True”
+elif [ -f the_other_file ]; then
+  foo="True"
+else
+  foo="False"
+fi
+if [ "$foo" = "True" ]; then
+  echo "One of the files exists"
+fi  
+\end{lstlisting}
+
+虽然这些可以用多个if语句实现，但你会发现结果很尴尬。shell有一对特殊的结构来处理命令列表:AND列表和OR列表。
+
+\subsection{AND列表}
+AND list结构使您能够执行一系列命令，只有在前面的所有命令都成功时才执行下一个命令。语法为:
+\begin{lstlisting}
+statement1 && statement2 && statement3 && ...
+\end{lstlisting}
+从左边开始，每条语句都被执行;如果返回true，则执行右边的下一个语句。这个过程会一直持续下去，直到有一条语句返回false，在这之后，列表中的所有语句都不会再被执行。
+每条语句都是独立执行的。如果所有命令都成功执行，AND列表作为一个整体就成功了，否则就失败了。
+
+示例：
+\begin{lstlisting}[language=sh]
+#!/bin/sh
+
+touch file_one
+rm -f file_two
+
+if [ -f file_one ] && echo "hello" && [ -f file_two ] && echo " there"
+then
+  echo "in if"
+else
+  echo "in else"
+fi
+exit 0
+\end{lstlisting}
+输出：
+\begin{lstlisting}
+hello
+in else
+\end{lstlisting}
+
+\subsection{OR列表}
+OR列表结构使我们能够执行一系列命令，直到其中一条成功，然后就不再执行了
+\begin{lstlisting}
+  statement1 || statement2 || statement3 || ...
+\end{lstlisting}
+从左边开始，每条语句都被执行。如果返回false，则执行右边的下一个语句。这个过程会一直持续下去，直到有一条语句返回true，此时不再执行其他语句.
+
+将之前的示例复制修改一下：
+\begin{lstlisting}[language=sh]
+  #!/bin/sh
+
+  touch file_one
+  rm -f file_two
+  
+  if [ -f file_one ] || echo "hello" || [ -f file_two ] || echo " there"
+  then
+    echo "in if"
+  else
+    echo "in else"
+  fi
+  exit 0
+\end{lstlisting}
+输出：
+\begin{lstlisting}
+hello
+in if
+\end{lstlisting}
+
+如果将两种逻辑结合起来，例如
+\begin{lstlisting}
+  [ -f file_one ] && command for true || command for false
+\end{lstlisting}
+如果测试成功，则执行第一个命令，否则执行第二个命令。通常你应该使用大括号来强制求值的顺序。
+
+\section{语句块}
+如果你想在一个只允许使用一个语句的地方使用多个语句，例如在AND或or列表中，你可以将它们放在大括号{}中，形成一个语句块。例如：
+\begin{lstlisting}
+get_confirm && {
+  grep -v "$cdcatnum" $tracks_file > $temp_file
+  cat $temp_file > $tracks_file
+  echo
+  add_record_tracks
+}
+\end{lstlisting}
+
+\section{函数}
+要定义一个shell函数，只需编写它的名称，后跟空括号，并将语句括在大括号中: 
+\begin{lstlisting}
+function_name () {
+  statements
+}
+\end{lstlisting}
+
+示例：
+\begin{lstlisting}[language=sh]
+#!/bin/sh
+
+foo() {
+  echo "Function foo is executing"
+}
+
+echo "script starting"
+foo
+echo "script ended"
+
+exit 0
+\end{lstlisting}
+输出：
+\begin{lstlisting}
+script starting
+Function foo is executing
+script ending
+\end{lstlisting}
+你必须始终在调用之前定义一个函数。
+
+你可以使用return命令让函数返回数值。让函数返回字符串的通常方法是，函数将字符串存储在一个变量中，然后可以在函数结束后使用该变量。或者，你可以echo一个字符串并捕获结果，如下所示:
+\begin{lstlisting}[language=sh]
+  foo () {echo JAY;}
+  ...
+  result="$(foo)"
+\end{lstlisting}
+
+你可以使用local关键字在shell函数中声明局部变量。这样变量就只能在函数的作用域中了。否则，函数可以访问其他在作用域中本质上是全局的shell变量。如果局部变量与全局变量同名，它会覆盖该变量，但仅在函数内部。例如，你可以对前面的脚本进行以下更改，以查看实际效果:
+\begin{lstlisting}[language=sh]
+#!/bin/sh
+sample_text="global variable"
+foo() {
+  local sample_text="local variable"
+  echo "Function foo is executing"
+  echo $sample_text
+}
+echo "script starting"
+echo $sample_text
+foo
+echo "script ended"
+echo $sample_text
+exit 0
+\end{lstlisting}
+
+下面是一个有返回值的示例：
+\begin{lstlisting}[language=sh]
+#!/bin/sh
+
+yes_or_no() {
+  echo "Is your name $* ?"
+  while true
+  do
+    echo -n "Enter yes or no: "
+    read x
+    case "$x" in
+      y | yes ) return 0;;
+      n | no ) return 1;;
+      * ) echo "Answer yes or no"
+    esac
+  done
+}  
+ #定义函数yes_or_no
+
+ echo "Original parameters are $*"
+ if yes_or_no "$1"
+ then
+  echo "Hi $1, nice name"
+ else
+  echo "Never mind"
+ fi
+ exit 0
+ #程序的主要部分
+\end{lstlisting}
+典型输出：
+\begin{lstlisting}
+$ ./my_name Rick Neil
+Original parameters are Rick Neil
+Is your name Rick ?
+Enter yes or no: yes
+Hi Rick, nice name
+$
+\end{lstlisting}
+
+\section{命令}
+\subsection{break}
+在满足控制条件之前，使用break对包围的for、while或until循环进行转义。你可以给break一个额外的数值参数，也就是要跳出循环的次数，但这会使脚本非常难以阅读。默认情况下，break会转义一个关卡。
+\begin{lstlisting}[language=sh]
+#!/bin/sh
+
+rm -rf fred*
+echo > fred1
+echo > fred2
+mkdir fred3
+echo > fred4
+
+for file in fred*
+do
+  if [ -d “$file” ]; then
+    break;
+    fi
+done
+
+echo first directory starting fred was $file
+
+rm -rf fred*
+exit 0
+\end{lstlisting}
+
+\subsection{:命令}
+冒号命令为null命令。它偶尔可以简化条件的逻辑，作为true的别名。由于它是内置的，:运行速度比true快，尽管它的输出可读性也差得多。 
+你可能会看到它被用作while循环的条件;\texttt{While:}实现无限循环，代替了更常见的While true。 
+结构在变量的条件设置中也很有用。
+\begin{lstlisting}
+  : ${var:=value}
+\end{lstlisting}
+
+示例：
+\begin{lstlisting}[language=sh]
+#!/bin/sh
+rm -f fred
+if [ -f fred ]; then
+  :
+else
+  echo file fred did not exist
+fi
+exit 0
+\end{lstlisting}
+
+\subsection{continue}
+这个命令使封闭的for、while或until循环在下一次迭代时继续，循环变量取列表中的下一个值:
+\begin{lstlisting}[language=sh]
+#!/bin/sh
+
+rm -rf fred*
+echo > fred1
+echo > fred2
+mkdir fred3
+echo > fred4
+
+for file in fred*
+do
+if [ -d “$file” ]; then
+  echo “skipping directory $file”
+  continue
+  fi
+  echo file is $file
+done
+
+rm -rf fred*
+exit 0
+\end{lstlisting}
+
+Continue可以将要恢复的封闭循环编号作为可选参数，以便您可以部分跳出嵌套循环。这个参数很少使用，因为它经常使脚本更加难以理解。例如,
+\begin{lstlisting}[language=sh]
+  for x in 1 2 3
+  do
+    echo before $x
+    continue 1
+    echo after $x
+  done
+\end{lstlisting}
+结果为：
+\begin{lstlisting}
+  before 1
+  before 2
+  before 3
+\end{lstlisting}
+
+\subsection{.命令}
+在当前shell中执行命令。
+\begin{lstlisting}
+  . ./shell_script
+\end{lstlisting}
+默认情况下，在执行shell脚本时，会创建一个新的环境，因此脚本对环境变量所做的任何更改都会丢失。而dot命令则允许被执行的脚本改变当前环境。
+
+示例一：
+\begin{lstlisting}[language=sh]
+  #!/bin/sh
+  version=classic
+  PATH=/usr/local/old_bin:/usr/bin:/bin:.
+  PS1="classic> "
+\end{lstlisting}
+
+示例二：
+\begin{lstlisting}[language=sh]
+#!/bin/sh
+version=latest
+PATH=/usr/local/new_bin:/usr/bin:/bin:.
+PS1="latest version> "
+\end{lstlisting}
+
+示例三：(脚本与dot命令结合设置环境)
+\begin{lstlisting}[language=sh]
+$ . ./classic_set
+classic> echo $version
+classic
+classic> . /latest_set
+latest version> echo $version
+latest
+latest version>
+\end{lstlisting}
+
+\subsection{echo}
+使用echo命令输出一个后跟换行符的字符串。常见的问题是如何抑制换行符。Linux中常用的方法是使用
+\begin{lstlisting}[language=sh]
+  echo -n "string to output"
+\end{lstlisting}
+
+\subsection{eval}
+eval命令使你能够评估参数。它内置在shell中，通常不作为一个单独的命令存在。也许最好用一个借用X/Open规范本身的简短例子来说明: 
+\begin{lstlisting}[language=sh]
+  foo=10
+  x=foo
+  y='$'$x
+  echo $y
+\end{lstlisting}
+这将输出\$foo
+\begin{lstlisting}[language=sh]
+  foo=10
+  x=foo
+  eval y='$'$x
+  echo $y
+\end{lstlisting}
+将输出10
+
+\subsection{exec}
+exec命令有两种不同的用途。它的典型用途是用一个不同的程序替换当前的shell。
+exec的第二个用途是修改当前的文件描述符。
+
+\subsection{exit n}
+exit命令会让脚本退出，退出代码为n。如果你允许你的脚本退出而没有指定退出状态，那么脚本中执行的最后一个命令的状态将被用作返回值。
+\begin{table}[p!]
+  
+  \caption{退出码表}
+  \centering
+  \begin{tabular}{|c|c|}
+  \hline
+  退出代码 & 描述 \\
+  \hline
+  0 & 正常退出 \\
+  \hline
+  1-125 & 脚本可用错误码 \\
+  \hline
+  126 & 文件无法执行 \\
+  \hline
+  127 & 没有找到命令 \\
+  \hline
+  128及以上 & 出现信号\\
+  \hline
+  \end{tabular}
+\end{table}
+  
+示例：
+\begin{lstlisting}[language=sh]
+  #!/bin/sh
+  if [ -f .profile ]; then
+    exit 0
+  fi
+  exit 1
+\end{lstlisting}
+
+\subsection{export}
+export命令使作为其参数命名的变量在子shell中可用。
+
+示例：\\
+脚本2：
+\begin{lstlisting}[language=sh]
+#!/bin/sh
+echo "$foo"
+echo "$bar"
+\end{lstlisting}
+脚本1：
+\begin{lstlisting}[language=sh]
+#!/bin/sh
+foo="The first meta-syntactic variable"
+export bar="The second meta-syntactic variable"
+export2
+\end{lstlisting}
+输出
+\begin{lstlisting}
+  $ ./export1
+  The second meta-syntactic variable
+  $
+\end{lstlisting}
+
+\subsection{expr}
+expr命令将其参数作为一个表达式进行计算.
+\begin{lstlisting}
+  x=`expr $x + 1`
+\end{lstlisting}
+
+\begin{table}[p!]
+  
+  \caption{表达式求值表}
+  \centering
+  \begin{tabular}{|c|c|}
+  \hline
+  表达式求值 & 描述 \\
+  \hline
+  expr1 | expr2  & 如果expr1非0,则为expr1,否则为expr2 \\
+  \hline
+  expr1 \& expr2 & 如果其中一个表达式为为0则为0 \\
+  \hline
+  expr1 = expr2 & 相等则为1 \\
+  \hline
+  expr1 > expr2 & 大于 \\
+  \hline
+  expr1 >= expr2 & 大于等于 \\
+  \hline
+  ... & ... \\
+  \hline
+  \end{tabular}
+\end{table}
+
+\subsection{printf}
+\begin{table}[p!]
+  
+  \caption{转义序列}
+  \centering
+  \begin{tabular}{|c|c|}
+  \hline
+  转义序列 & 描述 \\
+  \hline
+  \textbackslash"  & " \\
+  \hline
+  \textbackslash \textbackslash & \textbackslash \\
+  \hline
+  \textbackslash a & 响铃 \\ 
+  \hline
+  \textbackslash b & 退格 \\
+  \hline
+  \textbackslash c & 抑制进一步输出 \\
+  \hline
+  \textbackslash n & 换行 \\
+  \hline
+  \textbackslash r & 回车 \\
+  \hline
+  ... & ... \\
+  \hline
+  \end{tabular}
+\end{table}
+
+转换说明符由\% 构成。后面跟着转换字符。
+\begin{table}[p!]
+  
+  \caption{转义序列}
+  \centering
+  \begin{tabular}{|c|c|}
+  \hline
+  转义序列 & 描述 \\
+  \hline
+  C  & 输出字符 \\
+  \hline
+  D & 输出十进制数 \\
+  \hline
+  S  & 字符串 \\ 
+  \hline
+  \% & \% \\
+  \hline
+  \end{tabular}
+\end{table}
+
+\subsection{return}
+return命令会导致函数返回，正如我们之前在学习函数时提到的那样。
+\subsection{set}
+\begin{lstlisting}[language=sh]
+  #!/bin/sh
+  echo the date is $(date)
+  set $(date)
+  echo The month is $2
+  exit 0
+\end{lstlisting}
+
+\subsection{shift}
+shift命令将所有参数变量向下移动1，这样\$2变成\$1，\$3变成\$2，以此类推。之前\$1的值被丢弃，而\$0保持不变。
+\begin{lstlisting}[language=sh]
+  #!/bin/sh
+  while [ "$1" != "" ]; do
+  echo "$1"
+  shift
+  done
+  exit 0
+\end{lstlisting}
+
+\subsection{trap}
+trap命令被传递要采取的动作，后面跟着要启动trap的信号名称。
+
+示例：
+\begin{lstlisting}[language=sh]
+  #!/bin/sh
+  trap ‘rm -f /tmp/my_tmp_file_$$’ INT
+  echo creating file /tmp/my_tmp_file_$$
+  date > /tmp/my_tmp_file_$$
+  echo “press interrupt (CTRL-C) to interrupt ....”
+  while [ -f /tmp/my_tmp_file_$$ ]; do
+  echo File exists
+  sleep 1
+  done
+  echo The file no longer exists
+  trap INT
+  echo creating file /tmp/my_tmp_file_$$
+  date > /tmp/my_tmp_file_$$
+  echo “press interrupt (control-C) to interrupt ....”
+  while [ -f /tmp/my_tmp_file_$$ ]; do
+  echo File exists
+  sleep 1
+  done
+  echo we never get here
+  exit 0
+\end{lstlisting}
+如果你运行这个脚本，按住Ctrl，然后在每个循环中按C(或任何你的中断键组合)，你会得到以下输出: 
+\begin{lstlisting}
+  creating file /tmp/my_tmp_file_141
+  press interrupt (CTRL-C) to interrupt ....
+  File exists
+  File exists
+  File exists
+  File exists
+  The file no longer exists
+  creating file /tmp/my_tmp_file_141
+  press interrupt (CTRL-C) to interrupt ....
+  File exists
+  File exists
+  File exists
+  File exists
+\end{lstlisting}
+
+\subsection{unset}
+\begin{lstlisting}[language=sh]
+  # !/bin/sh 
+  foo= " Hello World " echo $foo 
+  Unset foo echo $foo   
+\end{lstlisting}
+
+\section{两个更有用的命令和正则表达式}
+\subsection{find}
+\begin{lstlisting}
+  # find / -mount -name test -print
+  /usr/bin/test
+  #
+
+  find [path] [options] [tests] [actions]
+\end{lstlisting}
+
+\subsection{grep}
+\begin{lstlisting}
+  grep [options] PATTERN [FILES]
+\end{lstlisting}
+
+
+\bibliographystyle{plain}
+\bibliography{crazyfish.bib}
+
+\end{document}

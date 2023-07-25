@@ -1,0 +1,158 @@
+\documentclass{ctexart}
+
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{tikz}
+\usepackage{natbib}
+
+\title{作业二：翻译与论文排版}
+\author{申屠慧\\能源与环境系统工程（智慧能源班） 3210103417}
+
+\begin{document}
+
+\maketitle
+
+\section{不可压缩流体纳维-斯托克斯方程}
+不可压缩流体的二维流场完全由速度矢量 
+$ q = (u(x,y)， v(x,y)) \in \mathbb{R}^2 $ 
+和压力 $ p(x,y) \in \mathbb{R} $ 来描述。\cite{danaila2007introduction}
+这些函数是下列守恒定律的解(例如，参见Hirsch, 1988):
+\begin{itemize}
+    \item 质量守恒
+        \begin{equation} \label{eq:mass}
+        div(q)=0,
+        \end{equation}
+    或者，用散度算子
+    \footnote{我们回顾二维域的微分算子散度、梯度和拉普拉斯算子的定义:
+    如果 $ v = (v_x,v_y): \mathbb{R}^2\rightarrow \mathbb{R}^2$
+    和$\varphi :\mathbb{R}^2 \rightarrow \mathbb{R} $，
+    则 $ div(v) = \frac{v_x}{x} $,   
+    $\mathcal{G} \varphi = (\frac{\partial \varphi}{\partial x}, {\partial \varphi}{\partial y}),$  
+    $\Delta \varphi = div(\mathcal{G}\varphi) = \frac{\partial^2 \varphi}{\partial x^2} + \frac{\partial^2 \varphi}{\partial y^2}$, 
+    $\Delta v = (\Delta v_x, \Delta v_y)$.}
+    的显式表示，
+        \begin{equation} \label{eq:masse}
+        \frac{\partial u}{\partial x} + \frac{\partial v}{\partial y} = 0,
+        \end{equation}
+    \item 简化形式的动量守恒方程\footnote{我们定义$\bigotimes$为张量积}
+        \begin{equation} \label{eq:moment}
+            \frac{\partial q}{\partial t} + div(q \bigotimes q) = -\mathcal{G}p + \frac{1}{Re} \Delta q, 
+        \end{equation}
+        或者，用展开的形式，
+        \begin{equation} \label{eq:momente}
+        \left\{
+        \begin{array}{ll}
+        \frac{\partial u}{\partial t} + \frac{\partial u^2}{\partial x} + \frac{\partial uv}{\partial y}
+         = -\frac{\partial p}{\partial x} + \frac{1}{Re} ( \frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 u}{\partial y^2}) \\
+        \frac{\partial v}{\partial t} + \frac{\partial uv}{\partial x} + \frac{\partial v^2}{\partial y}
+         = -\frac{\partial p}{\partial y} + \frac{1}{Re} ( \frac{\partial^2 v}{\partial x^2} + \frac{\partial^2 v}{\partial y^2}) 
+        \end{array}
+        \right.
+        \end{equation}
+        以上方程用无量纲的形式写出，使用了以下变量：
+        \begin{equation} \label{eq:variable}
+            x = \frac{x^\ast }{L} , y = \frac{y^\ast }{L} , u = \frac{u^\ast }{V_0} ,  v = \frac{v^\ast }{V_0}
+        \end{equation}
+        这里有 $ (\ast) $ 上标的变量表示以国际单位制测量的物理量。
+        常数 $ L , V_0 $ 分别是表征的参考长度和流动速度。
+        无量纲数 $ Re $ 称为雷诺数，它的大小表示了惯性（或者对流性）与流动中的粘性（或者扩散项）对流场影响的大小：
+        \begin{equation} \label{eq:Re}
+            Re = \frac {V_0 L}{\nu}
+        \end{equation}
+        $ \nu $ 是流体的运动粘度。\par
+        总而言之，偏微分方程形式的纳维-斯托克斯方程的数值解将由本文中式 \ref{eq:masse} 和 \ref{eq:momente} 决定；
+        初始条件（ $ t = 0 $ 时刻）与边界条件将在之后的章节中讨论。
+\end{itemize}
+  
+\section{计算域，交错网络与边界条件}
+通过考虑处处具有周期性边界条件的矩形域
+$ L_x \times L_y $ （见 ），
+数值求解纳维-斯托克斯方程得到了极大的简化。速度场$q(x,y)$和压力场$p(x,y)$的周期性在数学上表示为
+\begin{equation} \label{eq:y}
+    q(0,y) = q(L_x,y),  p(0,y) = p(L_x,y),  \forall y \in [0,L_y],
+\end{equation}
+\begin{equation} \label{eq:x}
+    q(x,0) = q(x,L_y),  p(x,0) = p(x,L_y),  \forall x \in [0,L_x],
+\end{equation}
+计算解的点分布在矩形和均匀的二维网格之后的域中。
+由于在我们的方法中并非所有变量都共享相同的网格，
+因此我们首先定义一个主网格(参见 \ref{fig:vector} )，沿$x$方向分别取$n_x$个计算点，相应地沿$y$方向分别取$n_y$个计算点:
+\begin{equation} \label{eq:xc}
+    x_c(i) = (i-1)\delta x,  \delta x = \frac{L_x}{n_x - 1},  i = 1,...,n_x,
+\end{equation}
+\begin{equation} \label{eq:yc}
+    y_c(j) = (j-1)\delta j,  \delta y = \frac{L_y}{n_y - 1},  i = 1,...,n_y,
+\end{equation}
+\begin{figure}
+
+\begin{tikzpicture}
+    \draw (0,0) rectangle (5,4);
+    \draw[->] (0.5,0.5) -- (4.5,0.5) node[right]{};
+    \draw[->] (0.5,0.5) -- (0.5,3.7) node[above]{};
+    \draw[color=red] (0.5,0.5) rectangle (3.5,3.5);
+    \draw[<->] (0.5,2) -- (1,2);
+    \draw[<->] (2,0.5) -- (2,1);
+    \draw[<->] (3,2) -- (3.5,2);
+    \draw[<->] (2,3) -- (2,3.5);
+    \node[below left] at (0.5,0.5) {0};
+    \node[below] at (2,0.5) {$x$};
+    \node[left] at (0.5,2) {$y$};
+    \node[left] at (0.5,3.5) {$L_y$};
+    \node[below] at (3.5,0.5) {$L_x$};
+    \node[below] at (1,2) {周期性};
+    \node[below] at (3.5,2) {周期性};
+    \node[right] at (2,1) {周期性};
+    \node[right] at (2,3) {周期性};
+\begin{scope}[xshift=6cm]
+    \draw (0,0) rectangle (5,4);
+    \draw[->] (0.5,0.5) -- (4.5,0.5) node[right]{};
+    \draw[->] (0.5,0.5) -- (0.5,3.7) node[above]{};
+    \draw[color=green] (0.5,0.5) rectangle (3.5,3.5);
+    \draw[color=green] (1.5,0.5) -- (1.5,3.5);
+    \draw[color=green] (2.5,0.5) -- (2.5,3.5);
+    \draw[color=green] (0.5,1.5) -- (3.5,1.5);
+    \draw[color=green] (0.5,2.5) -- (3.5,2.5);
+    \draw[dashed] (0.5,2) -- (3.5,2);
+    \draw[dashed] (2,0.5) -- (2,3.5);
+    \node[below] at (4.5,0.5) {$x$};
+    \node[left] at (0.5,1) {$y$};
+    \node[left] at (0.5,3.5) {$L_y$};
+    \node[above] at (3.5,0.5) {$L_x$};
+    \node[circle,fill,inner sep=2pt,label=above:{$u(i,j)$}] at (1.5,2) {};
+    \node[circle,fill,inner sep=2pt,label=right:{$p(i,j)$}] at (2,2) {};
+    \node[circle,fill,inner sep=2pt,label=below:{$v(i,j)$}] at (2,1.5) {};
+    \node[left] at (0.5,1.5) {$y_c(j+1)$};
+    \node[left] at (0.5,2) {$y_m(j)$};
+    \node[left] at (0.5,2.5) {$y_c(j)$};
+    \node[below left] at (1.5,0.5) {$x_c(i)$};
+    \node[below] at (2,0.5) {$x_m(i)$};
+    \node[below right] at (2.5,0.5) {$x_c(i+1)$};
+    \node[below left] at (0.5,0.5) {0};
+\end{scope}
+\end{tikzpicture}
+\caption{计算域，交错网格和边界条件}
+\label{fig:vector}
+\end{figure}
+
+次级网格由初级网格单元的中心定义:
+\begin{equation} \label{eq:xm}
+    x_m(i) = (i - 1/2)\delta x,  i = 1,...,n_{xm},
+\end{equation}
+\begin{equation} \label{eq:ym}
+    y_m(j) = (j - 1/2)\delta y,  j = 1,...,n_{ym},
+\end{equation}
+这里我们用了简化符号 $n_{xm} = n_x - 1,  n_{ym} =n_y-1$ 。
+在定义为矩形$[x_c(i)，x_c(i + 1)] \times [y_c(j)， y_c(j + 1)]$
+的计算单元内，将未知变量$u, v, p$计算为不同空间位置解的近似值:
+\begin{itemize}
+    \item $u(i,j) \approx u(x_c(i),y_m(j)) $（单元的西面）
+    \item $ v(i,j) \approx v(x_m(i),y_c(j)) $（单元的南面）
+    \item $ p(i,j) \approx p(x_m(i),y_m(j)) $（单元的中心）
+\end{itemize}
+变量的交错排列具有压力和速度之间强耦合的优点。
+它还有助于（参见本章末尾的参考资料）避免一些稳定性和收敛性问题，这些问题是由并置排列（所有变量都在相同的网格点上计算）引起的。
+
+\bibliographystyle{plain}
+\bibliography{references.bib}
+\end{document}
